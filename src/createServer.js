@@ -1,18 +1,17 @@
-/* eslint-disable prettier/prettier */
 'use strict';
 
 const express = require('express');
 const { Op } = require('sequelize');
+const {
+  models: { User, Category, Expense },
+} = require('./models/models');
 
 function createServer() {
-  const {
-    models: { User, Expense },
-  } = require('./models/models');
-
   const app = express();
 
   app.use(express.json());
 
+  // ===== USERS =====
   app.get('/users', async (req, res) => {
     const users = await User.findAll();
 
@@ -38,30 +37,13 @@ function createServer() {
       return res.sendStatus(400);
     }
 
-    const foundUser = await User.findByPk(id);
-
-    if (!foundUser) {
-      return res.sendStatus(404);
-    }
-
-    res.status(200).send(foundUser);
-  });
-
-  app.delete('/users/:id', async (req, res) => {
-    const id = Number(req.params.id);
-
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.sendStatus(400);
-    }
-
     const user = await User.findByPk(id);
 
     if (!user) {
       return res.sendStatus(404);
     }
 
-    await user.destroy();
-    res.sendStatus(204);
+    res.status(200).send(user);
   });
 
   app.patch('/users/:id', async (req, res) => {
@@ -81,14 +63,103 @@ function createServer() {
     if (name) {
       user.name = name;
     }
-
     await user.save();
     res.status(200).send(user);
   });
 
+  app.delete('/users/:id', async (req, res) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.sendStatus(400);
+    }
+
+    const user = await User.findByPk(id);
+
+    if (!user) {
+      return res.sendStatus(404);
+    }
+
+    await user.destroy();
+    res.sendStatus(204);
+  });
+
+  // ===== CATEGORIES =====
+  app.get('/categories', async (req, res) => {
+    const categories = await Category.findAll();
+
+    res.status(200).send(categories);
+  });
+
+  app.post('/categories', async (req, res) => {
+    const { name } = req.body;
+
+    if (!name) {
+      return res.sendStatus(400);
+    }
+
+    const category = await Category.create({ name });
+
+    res.status(201).send(category);
+  });
+
+  app.get('/categories/:id', async (req, res) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.sendStatus(400);
+    }
+
+    const category = await Category.findByPk(id);
+
+    if (!category) {
+      return res.sendStatus(404);
+    }
+
+    res.status(200).send(category);
+  });
+
+  app.patch('/categories/:id', async (req, res) => {
+    const id = Number(req.params.id);
+    const { name } = req.body;
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.sendStatus(400);
+    }
+
+    const category = await Category.findByPk(id);
+
+    if (!category) {
+      return res.sendStatus(404);
+    }
+
+    if (name) {
+      category.name = name;
+    }
+    await category.save();
+    res.status(200).send(category);
+  });
+
+  app.delete('/categories/:id', async (req, res) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.sendStatus(400);
+    }
+
+    const category = await Category.findByPk(id);
+
+    if (!category) {
+      return res.sendStatus(404);
+    }
+
+    await category.destroy();
+    res.sendStatus(204);
+  });
+
+  // ===== EXPENSES =====
   app.get('/expenses', async (req, res) => {
     const { userId, categories, from, to } = req.query;
-
     const where = {};
 
     if (userId) {
@@ -96,9 +167,7 @@ function createServer() {
     }
 
     if (categories) {
-      const cats = Array.isArray(categories) ? categories : [categories];
-
-      where.category = { [Op.in]: cats };
+      where.category = categories;
     }
 
     if (from || to) {
@@ -113,16 +182,16 @@ function createServer() {
       where.spentAt[Op.lte] = new Date(to);
     }
 
-    const filteredExpenses = await Expense.findAll({
+    const expenses = await Expense.findAll({
       where,
       order: [['id', 'ASC']],
     });
 
-    res.status(200).send(filteredExpenses);
+    res.status(200).send(expenses);
   });
 
   app.post('/expenses', async (req, res) => {
-    const { userId, spentAt, title, amount, category, note } = req.body;
+    const { userId, spentAt, title, amount, note, category } = req.body;
 
     if (!Number.isInteger(userId)) {
       return res.status(400).send({ message: 'Invalid userId' });
@@ -138,7 +207,7 @@ function createServer() {
       return res.status(400).send({ message: 'Missing required fields' });
     }
 
-    const newExpense = await Expense.create({
+    const expense = await Expense.create({
       userId,
       spentAt,
       title,
@@ -147,26 +216,10 @@ function createServer() {
       note: note || null,
     });
 
-    res.status(201).send(newExpense);
+    res.status(201).send(expense);
   });
 
   app.get('/expenses/:id', async (req, res) => {
-    const id = Number(req.params.id);
-
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.sendStatus(400);
-    }
-
-    const foundExpense = await Expense.findByPk(id);
-
-    if (!foundExpense) {
-      return res.sendStatus(404);
-    }
-
-    res.status(200).send(foundExpense);
-  });
-
-  app.delete('/expenses/:id', async (req, res) => {
     const id = Number(req.params.id);
 
     if (!Number.isInteger(id) || id <= 0) {
@@ -179,8 +232,7 @@ function createServer() {
       return res.sendStatus(404);
     }
 
-    await expense.destroy();
-    res.sendStatus(204);
+    res.status(200).send(expense);
   });
 
   app.patch('/expenses/:id', async (req, res) => {
@@ -206,6 +258,23 @@ function createServer() {
     });
 
     res.status(200).send(expense);
+  });
+
+  app.delete('/expenses/:id', async (req, res) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.sendStatus(400);
+    }
+
+    const expense = await Expense.findByPk(id);
+
+    if (!expense) {
+      return res.sendStatus(404);
+    }
+
+    await expense.destroy();
+    res.sendStatus(204);
   });
 
   return app;

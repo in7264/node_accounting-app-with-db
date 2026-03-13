@@ -6,7 +6,7 @@ const { createServer } = require('./createServer');
 const { sequelize } = require('./db');
 
 async function startServer() {
-  await sequelize.sync({ force: true });
+  await sequelize.sync({ alter: true });
 
   const app = createServer();
 
