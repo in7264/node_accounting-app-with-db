@@ -166,10 +166,6 @@ function createServer() {
       where.userId = Number(userId);
     }
 
-    if (categories) {
-      where.category = categories;
-    }
-
     if (from || to) {
       where.spentAt = {};
     }
@@ -182,12 +178,20 @@ function createServer() {
       where.spentAt[Op.lte] = new Date(to);
     }
 
+    const includeOptions = [{ model: Category, required: false }];
+
+    if (categories) {
+      includeOptions[0].where = { name: categories };
+      includeOptions[0].required = true;
+    }
+
     const expenses = await Expense.findAll({
       where,
+      include: includeOptions,
       order: [['id', 'ASC']],
     });
 
-    res.status(200).send(expenses);
+    res.status(200).send(expenses.map(formatExpense));
   });
 
   app.post('/expenses', async (req, res) => {
@@ -207,16 +211,31 @@ function createServer() {
       return res.status(400).send({ message: 'Missing required fields' });
     }
 
+    let categoryId = null;
+
+    if (category) {
+      let cat = await Category.findOne({ where: { name: category } });
+
+      if (!cat) {
+        cat = await Category.create({ name: category });
+      }
+      categoryId = cat.id;
+    }
+
     const expense = await Expense.create({
       userId,
+      categoryId,
       spentAt,
       title,
       amount,
-      category: category || null,
       note: note || null,
     });
 
-    res.status(201).send(expense);
+    const full = await Expense.findByPk(expense.id, {
+      include: [{ model: Category, required: false }],
+    });
+
+    res.status(201).send(formatExpense(full));
   });
 
   app.get('/expenses/:id', async (req, res) => {
@@ -226,13 +245,15 @@ function createServer() {
       return res.sendStatus(400);
     }
 
-    const expense = await Expense.findByPk(id);
+    const expense = await Expense.findByPk(id, {
+      include: [{ model: Category, required: false }],
+    });
 
     if (!expense) {
       return res.sendStatus(404);
     }
 
-    res.status(200).send(expense);
+    res.status(200).send(formatExpense(expense));
   });
 
   app.patch('/expenses/:id', async (req, res) => {
@@ -249,15 +270,27 @@ function createServer() {
       return res.sendStatus(404);
     }
 
+    if (category !== undefined) {
+      let cat = await Category.findOne({ where: { name: category } });
+
+      if (!cat) {
+        cat = await Category.create({ name: category });
+      }
+      expense.categoryId = cat.id;
+    }
+
     await expense.update({
       spentAt,
       title,
       amount,
-      category,
       note,
     });
 
-    res.status(200).send(expense);
+    const full = await Expense.findByPk(id, {
+      include: [{ model: Category, required: false }],
+    });
+
+    res.status(200).send(formatExpense(full));
   });
 
   app.delete('/expenses/:id', async (req, res) => {
@@ -280,4 +313,23 @@ function createServer() {
   return app;
 }
 
+function formatExpense(expense) {
+  const data = expense.toJSON();
+  const result = {
+    id: data.id,
+    userId: data.userId,
+    spentAt: data.spentAt,
+    title: data.title,
+    amount: data.amount,
+    note: data.note,
+  };
+
+  if (data.Category) {
+    result.category = data.Category.name;
+  } else {
+    result.category = null;
+  }
+
+  return result;
+}
 module.exports = { createServer };
